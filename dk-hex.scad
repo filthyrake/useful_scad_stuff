@@ -1,5 +1,6 @@
-// === NASA-STYLE HEXAGONAL CHAINMAIL v5l ===
+// === NASA-STYLE HEXAGONAL CHAINMAIL v5l - OPTIMIZED ===
 // All rings same direction - no alternation
+// Performance optimized: uses polyhedron rings instead of hull-spheres
 
 // Grid parameters
 hex_count_x = 20;
@@ -43,6 +44,7 @@ ring_center_dist = post_radius + ring_major_r - ring_minor_r + ring_overhang;
 
 $fn = 32;
 ring_segments = 64;
+ring_profile_segments = 12;  // Cross-section resolution
 
 // === MODULES ===
 
@@ -65,45 +67,106 @@ module center_cap() {
     cylinder(r = cap_radius, h = cap_height);
 }
 
-module twisted_ring() {
-    // Helical ring - Z varies around the ring
-    path_points = [
-        for (a = [0 : 360/ring_segments : 359])
-            [
-                ring_major_r * cos(a),
-                ring_major_r * sin(a),
-                ring_twist * sin(a) / 2
-            ]
+// Optimized twisted ring using polyhedron
+// Much faster than hull() of spheres
+module twisted_ring_fast() {
+    // Generate vertices for a tube following a helical path
+    path_segments = ring_segments;
+    profile_segments = ring_profile_segments;
+
+    // Vertical scale factor (flattening)
+    z_scale = 0.5;
+
+    // Generate all vertices
+    points = [
+        for (i = [0 : path_segments - 1])
+            let(
+                // Angle around the ring
+                path_angle = i * 360 / path_segments,
+                // Center point on the helix
+                cx = ring_major_r * cos(path_angle),
+                cy = ring_major_r * sin(path_angle),
+                cz = ring_twist * sin(path_angle) / 2,
+                // Tangent direction (derivative of helix)
+                tx = -sin(path_angle),
+                ty = cos(path_angle),
+                tz = ring_twist * cos(path_angle) / (2 * ring_major_r),
+                // Normalize tangent
+                t_len = sqrt(tx*tx + ty*ty + tz*tz),
+                tnx = tx/t_len,
+                tny = ty/t_len,
+                tnz = tz/t_len,
+                // Binormal (cross product of tangent and up)
+                // Using simplified calculation for ring
+                bx = -cos(path_angle),
+                by = -sin(path_angle),
+                bz = 0,
+                // Normal (cross tangent x binormal)
+                nx = tny*bz - tnz*by,
+                ny = tnz*bx - tnx*bz,
+                nz = tnx*by - tny*bx
+            )
+            for (j = [0 : profile_segments - 1])
+                let(
+                    // Angle around the cross-section
+                    profile_angle = j * 360 / profile_segments,
+                    // Offset in the cross-section plane
+                    cos_p = cos(profile_angle),
+                    sin_p = sin(profile_angle),
+                    // Point on cross-section (scaled vertically)
+                    px = cx + ring_minor_r * (cos_p * bx + sin_p * nx),
+                    py = cy + ring_minor_r * (cos_p * by + sin_p * ny),
+                    pz = (cz + ring_minor_r * (cos_p * bz + sin_p * nz)) * z_scale
+                )
+                [px, py, pz]
     ];
-    
-    for (i = [0 : len(path_points) - 1]) {
-        scale([1,1,0.5]){
-        hull() {
-            translate(path_points[i])
-                sphere(r = ring_minor_r);
-            translate(path_points[(i + 1) % len(path_points)])
-                sphere(r = ring_minor_r);
-        }
-    }
-    }
+
+    // Generate faces connecting the vertices
+    faces = [
+        // Side faces (quads split into triangles)
+        for (i = [0 : path_segments - 1])
+            let(
+                i_next = (i + 1) % path_segments,
+                base_i = i * profile_segments,
+                base_next = i_next * profile_segments
+            )
+            for (j = [0 : profile_segments - 1])
+                let(
+                    j_next = (j + 1) % profile_segments,
+                    // Four corners of the quad
+                    v0 = base_i + j,
+                    v1 = base_i + j_next,
+                    v2 = base_next + j_next,
+                    v3 = base_next + j
+                )
+                // Two triangles per quad
+                each [[v0, v1, v2], [v0, v2, v3]]
+    ];
+
+    polyhedron(points=points, faces=faces, convexity=4);
+}
+
+// Cached version - renders once and reuses
+module twisted_ring_cached() {
+    render(convexity=4) twisted_ring_fast();
 }
 
 module chainmail_hex_tile() {
     union() {
         // Flat hex top
         hex_tile();
-        
+
         // Central post
         center_post();
-        
+
         // 6 twisted rings - all same direction
         for (i = [0:5]) {
             rotate([0, 0, i * 60])
             translate([ring_center_dist, 0, -post_height/2])
             rotate([ring_tilt, 0, 0])
-                twisted_ring();
+                twisted_ring_fast();
         }
-        
+
         center_cap();
     }
 }
@@ -114,7 +177,7 @@ module hex_chainmail_grid() {
     for (row = [0 : hex_count_y - 1]) {
         for (col = [0 : hex_count_x - 1]) {
             x_offset = (row % 2 == 0) ? 0 : hex_apothem + ring_clearance/2;
-            
+
             translate([col * spacing_x + x_offset, row * spacing_y, post_height])
                 chainmail_hex_tile();
         }
