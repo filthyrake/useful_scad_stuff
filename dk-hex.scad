@@ -3,27 +3,27 @@
 // Performance optimized: uses polyhedron rings instead of hull-spheres
 
 // Grid parameters
-hex_count_x = 20;
-hex_count_y = 20;
+hex_count_x = 5;
+hex_count_y = 5;
 
 // === MASTER SIZE - Change this to scale everything ===
 hex_radius = 6;          // Outer radius (center to vertex)
 
 // === PROPORTIONS (as ratios of hex_radius) ===
 // Adjust these to change relative proportions
-tile_thickness_ratio = 0.15;    // Thickness of flat hex top
+tile_thickness_ratio = 0.30;    // Thickness of flat hex top
 post_radius_ratio = 0.20;       // Radius of center cylinder
-post_height_ratio = 0.60;       // How far post extends below tile
+post_height_ratio = 1.20;       // How far post extends below tile
 cap_radius_ratio = 0.50;        // Radius of the center cap
-cap_height_ratio = 0.20;        // Center cap height
+cap_height_ratio = 0.15;        // Center cap height
 ring_major_ratio = 0.40;        // Major radius of torus (ring size)
-ring_minor_ratio = 0.08;        // Minor radius (wire thickness)
-ring_overhang_ratio = 0.075;    // How far rings extend past hex edge
-ring_twist_ratio = 0.30;        // How much Z variation (helix height)
-ring_clearance_ratio = 0.04;    // Print-in-place gap
+ring_minor_ratio = 0.11;        // Minor radius (wire thickness)
+ring_overhang_ratio = 0.14;    // How far rings extend past hex edge
+ring_twist_ratio = 1;        // How much Z variation (helix height)
+ring_clearance_ratio = 0.11;    // Print-in-place gap
 
 // Ring tilt (angle - doesn't scale)
-ring_tilt = 45;
+ring_tilt = 0;
 
 // === DERIVED DIMENSIONS (auto-calculated from hex_radius) ===
 tile_thickness = hex_radius * tile_thickness_ratio;
@@ -75,7 +75,7 @@ module twisted_ring_fast() {
     profile_segments = ring_profile_segments;
 
     // Vertical scale factor (flattening)
-    z_scale = 0.5;
+    z_scale = 1;
 
     // Generate all vertices
     points = [
@@ -114,8 +114,8 @@ module twisted_ring_fast() {
                     cos_p = cos(profile_angle),
                     sin_p = sin(profile_angle),
                     // Point on cross-section (scaled vertically)
-                    px = cx + ring_minor_r * (cos_p * bx + sin_p * nx),
-                    py = cy + ring_minor_r * (cos_p * by + sin_p * ny),
+                    px = (cx + ring_minor_r * (cos_p * bx + sin_p * nx)) * 1.1,
+                    py = (cy + ring_minor_r * (cos_p * by + sin_p * ny)) * 0.6,
                     pz = (cz + ring_minor_r * (cos_p * bz + sin_p * nz)) * z_scale
                 )
                 [px, py, pz]
